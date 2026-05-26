@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GitHub Profile Finder</title>
+  </head>
+  <body>
+    <main>
+      <h1>GitHub Profile Finder</h1>
+
+      <div id="search-panel">
+        <input
+          id="search-input"
+          type="text"
+          placeholder="Enter GitHub username"
+        />
+        <button id="search-btn" type="button">Search</button>
+      </div>
+
+      <div id="message"></div>
+
+      <section id="profile-card"></section>
+
+      <section id="recent-searches">
+        <h2>Recent Searches</h2>
+        <ul id="recent-list"></ul>
+      </section>
+    </main>
+
+    <script>
+      const searchInput = document.getElementById("search-input");
+      const searchBtn = document.getElementById("search-btn");
+      const messageEl = document.getElementById("message");
+      const profileCard = document.getElementById("profile-card");
+      const recentList = document.getElementById("recent-list");
+      const STORAGE_KEY = "githubRecentSearches";
+
+      let recentSearches = loadRecentSearches();
+
+      function setMessage(text, isError = false) {
+        messageEl.textContent = text;
+        messageEl.style.color = isError ? "red" : "green";
+      }
+
+      function renderProfile(user) {
+        profileCard.innerHTML = `
+        <div>
+          <img src="${user.avatar_url}" alt="${user.login} avatar" width="100" />
+          <h3>${user.name || user.login}</h3>
+          <p>${user.bio || "No bio available."}</p>
+          <p>Public repos: ${user.public_repos}</p>
+        </div>
+      `;
+      }
+
+      function renderRecentSearches() {
+        recentList.innerHTML = recentSearches
+          .map(
+            (username) => `
+          <li>
+            <button type="button" data-username="${username}">${username}</button>
+          </li>
+        `,
+          )
+          .join("");
+
+        recentList.querySelectorAll("button").forEach((button) => {
+          button.addEventListener("click", () => {
+            const username = button.dataset.username;
+            searchInput.value = username;
+            handleSearch(username);
+          });
+        });
+      }
+
+      function loadRecentSearches() {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        return stored ? JSON.parse(stored) : [];
+      }
+
+      function saveRecentSearches() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(recentSearches));
+      }
+
+      async function fetchGithubUser(username) {
+        const response = await fetch(
+          `https://api.github.com/users/${username}`,
+        );
+        if (response.status === 404) {
+          throw new Error("User not found");
+        }
+        if (!response.ok) {
+          throw new Error("Unable to fetch user");
+        }
+        return response.json();
+      }
+
+      async function handleSearch(username) {
+        if (!username) {
+          setMessage("Please enter a GitHub username.", true);
+          return;
+        }
+
+        setMessage("Searching...", false);
+        profileCard.innerHTML = "";
+
+        try {
+          const user = await fetchGithubUser(username);
+          renderProfile(user);
+          setMessage("Profile loaded successfully.");
+
+          if (!recentSearches.includes(username)) {
+            recentSearches.unshift(username);
+            if (recentSearches.length > 5) {
+              recentSearches.pop();
+            }
+            saveRecentSearches();
+            renderRecentSearches();
+          }
+        } catch (error) {
+          setMessage(error.message, true);
+        }
+      }
+
+      searchBtn.addEventListener("click", () =>
+        handleSearch(searchInput.value.trim()),
+      );
+      searchInput.addEventListener("keypress", (event) => {
+        if (event.key === "Enter") {
+          handleSearch(searchInput.value.trim());
+        }
+      });
+
+      renderRecentSearches();
+    </script>
+  </body>
+</html>
